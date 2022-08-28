@@ -1,4 +1,5 @@
 ZSH_NVM_DIR=${0:a:h}
+ZSH_NVM_PLUGIN=${0}
 
 [[ -z "$NVM_DIR" ]] && export NVM_DIR="$HOME/.nvm"
 
@@ -182,6 +183,25 @@ _zsh_nvm_auto_use() {
   fi
 }
 
+_zsh_nvm_auto_use_on_load() {
+  # echo _zsh_nvm_auto_use_on_load
+  _zsh_nvm_rename_function _zsh_nvm_load _zsh_original_nvm_load
+  _zsh_nvm_load () {
+    # echo _zsh_nvm_auto_use_on_load wrapper
+    _zsh_nvm_rename_function _zsh_original_nvm_load _zsh_nvm_load
+    _zsh_nvm_load
+    _zsh_nvm_auto_use
+  }
+}
+
+_zsh_nvm_auto_use_lazy() {
+  _zsh_nvm_has nvm_find_nvmrc || return
+
+  nvm unload
+
+  source "$ZSH_NVM_PLUGIN"
+}
+
 _zsh_nvm_install_wrapper() {
   case $2 in
     'rc')
@@ -219,6 +239,17 @@ if [[ "$ZSH_NVM_NO_LOAD" != true ]]; then
     
     # Auto use nvm on chpwd
     [[ "$NVM_AUTO_USE" == true ]] && add-zsh-hook chpwd _zsh_nvm_auto_use && _zsh_nvm_auto_use
+
+    [[ "$NVM_AUTO_USE_ON_LOAD" == true && "$NVM_LAZY_LOAD" == true ]] && _zsh_nvm_auto_use_on_load
+
+    # if [[ "$NVM_AUTO_USE_LAZY" == true ]]; then
+    #   if [[ "$NVM_AUTO_USE_ON_LOAD" != true || "$NVM_LAZY_LOAD" != true || "$NVM_AUTO_USE" == true ]]; then
+    #     echo "Option 'NVM_AUTO_USE_LAZY' needs options 'NVM_AUTO_USE_ON_LOAD', 'NVM_LAZY_LOAD' and is not compactible with 'NVM_AUTO_USE' option."
+    #   else
+    #     add-zsh-hook chpwd _zsh_nvm_auto_use_lazy
+    #   fi
+    # fi
+
   fi
 
 fi

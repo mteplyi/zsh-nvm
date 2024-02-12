@@ -38,7 +38,6 @@ _zsh_nvm_global_binaries() {
 }
 
 _zsh_nvm_load() {
-
   # Source nvm (check if `nvm use` should be ran after load)
   if [[ "$NVM_NO_USE" == true ]]; then
     source "$NVM_DIR/nvm.sh" --no-use
@@ -64,6 +63,11 @@ _zsh_nvm_load() {
         ;;
       'install' | 'i')
         _zsh_nvm_install_wrapper "$@"
+        ;;
+      'unload')
+        _zsh_nvm_rename_function _zsh_nvm_nvm nvm
+        nvm "$@"
+        source "$ZSH_NVM_PLUGIN"
         ;;
       *)
         _zsh_nvm_nvm "$@"

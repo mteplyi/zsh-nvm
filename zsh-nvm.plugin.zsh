@@ -3,11 +3,11 @@ ZSH_NVM_PLUGIN=${0}
 
 [[ -z "$NVM_DIR" ]] && export NVM_DIR="$HOME/.nvm"
 
-_zsh_nvm_rename_function() {
-  test -n "$(declare -f $1)" || return
-  eval "${_/$1/$2}"
-  unset -f $1
-}
+# _zsh_nvm_rename_function() {
+#   test -n "$(declare -f $1)" || return
+#   eval "${_/$1/$2}"
+#   unset -f $1
+# }
 
 _zsh_nvm_has() {
   type "$1" > /dev/null 2>&1
@@ -38,6 +38,8 @@ _zsh_nvm_global_binaries() {
 }
 
 _zsh_nvm_load() {
+  echo Debug: _zsh_nvm_load
+
   # Source nvm (check if `nvm use` should be ran after load)
   if [[ "$NVM_NO_USE" == true ]]; then
     source "$NVM_DIR/nvm.sh" --no-use
@@ -45,11 +47,16 @@ _zsh_nvm_load() {
     source "$NVM_DIR/nvm.sh"
   fi
 
-  # Rename main nvm function
-  _zsh_nvm_rename_function nvm _zsh_nvm_nvm
+  # Backup main nvm function
+  functions -c nvm _zsh_nvm_nvm
 
-  # Wrap nvm in our own function
+  # Declare our own nvm wrapper function
   nvm() {
+    echo Debug: _zsh_nvm_wrapper starts with "$@"
+
+    # Restore main nvm function
+    functions -c _zsh_nvm_nvm nvm
+
     case $1 in
       'upgrade')
         _zsh_nvm_upgrade
@@ -58,22 +65,40 @@ _zsh_nvm_load() {
         _zsh_nvm_revert
         ;;
       'use')
+        _zsh_nvm_vars_unload
         _zsh_nvm_nvm "$@"
         export NVM_AUTO_USE_ACTIVE=false
+        _zsh_nvm_vars_load
         ;;
       'install' | 'i')
         _zsh_nvm_install_wrapper "$@"
         ;;
       'unload')
-        _zsh_nvm_rename_function _zsh_nvm_nvm nvm
-        nvm "$@"
+        _zsh_nvm_vars_unload
+        _zsh_nvm_nvm "$@"
         source "$ZSH_NVM_PLUGIN"
         ;;
       *)
         _zsh_nvm_nvm "$@"
         ;;
     esac
+
+    if [[ $1 != 'unload' ]]; then
+      # Restore nvm wrapper function
+      functions -c _zsh_nvm_nvm_wrapper nvm
+    fi
+
+    echo Debug: _zsh_nvm_wrapper ends
   }
+
+  # Backup nvm wrapper function
+  functions -c nvm _zsh_nvm_nvm_wrapper
+
+  if [[ "$NVM_AUTO_USE_ON_LOAD" == true ]]; then
+    _zsh_nvm_auto_use
+  fi
+
+  _zsh_nvm_vars_load
 }
 
 _zsh_nvm_completion() {
@@ -124,6 +149,7 @@ _zsh_nvm_lazy_load() {
 nvm_update() {
   echo 'Deprecated, please use `nvm upgrade`'
 }
+
 _zsh_nvm_upgrade() {
 
   # Use default upgrade if it's built in
@@ -189,22 +215,10 @@ _zsh_nvm_auto_use() {
   fi
 }
 
-_zsh_nvm_auto_use_on_load() {
-  # echo _zsh_nvm_auto_use_on_load
-  _zsh_nvm_rename_function _zsh_nvm_load _zsh_original_nvm_load
-  _zsh_nvm_load () {
-    # echo _zsh_nvm_auto_use_on_load wrapper
-    _zsh_nvm_rename_function _zsh_original_nvm_load _zsh_nvm_load
-    _zsh_nvm_load
-    _zsh_nvm_auto_use
-  }
-}
-
 _zsh_nvm_auto_use_lazy() {
   _zsh_nvm_has nvm_find_nvmrc || return
-
   nvm unload
-
+  _zsh_nvm_vars_unload
   source "$ZSH_NVM_PLUGIN"
 }
 
@@ -228,6 +242,60 @@ _zsh_nvm_install_wrapper() {
   esac
 }
 
+_zsh_nvm_vars_load() {
+  echo Debug: _zsh_nvm_vars_load
+
+  if [[ -z "$NVM_BIN" ]]; then
+    echo Error: NVM_BIN is empty!
+  else
+    #
+    # Update PNPM_HOME for PNPM
+    #
+
+    if [[ -z "${_ZSH_NVM_INITIAL_PNPM_HOME+x}" ]]; then
+      export _ZSH_NVM_INITIAL_PNPM_HOME=$PNPM_HOME
+    fi
+
+    export PNPM_HOME="$(dirname $NVM_BIN)/pnpm"
+
+    #
+    # Update PATH for PNPM
+    #
+
+    if [[ "$PATH" != *"$PNPM_HOME:"* ]]; then
+      export PATH="$PNPM_HOME:$PATH"
+    fi
+  fi
+}
+
+_zsh_nvm_vars_unload() {
+  echo Debug: _zsh_nvm_vars_unload
+
+  if [[ -z "${PNPM_HOME}" ]]; then
+    echo Error: PNPM_HOME is empty!
+    return
+  fi
+
+  if [[ -z "${_ZSH_NVM_INITIAL_PNPM_HOME+x}" ]]; then
+    echo Error: _ZSH_NVM_INITIAL_PNPM_HOME is not set!
+    return
+  fi
+
+  #
+  # Update PATH for PNPM
+  #
+
+  export PATH="$(echo "$PATH" | sed -e "s|$PNPM_HOME:||")"
+
+  #
+  # Update PNPM_HOME for PNPM
+  #
+
+  export PNPM_HOME=$_ZSH_NVM_INITIAL_PNPM_HOME
+
+  unset _ZSH_NVM_INITIAL_PNPM_HOME
+}
+
 # Don't init anything if this is true (debug/testing only)
 if [[ "$ZSH_NVM_NO_LOAD" != true ]]; then
 
@@ -239,14 +307,9 @@ if [[ "$ZSH_NVM_NO_LOAD" != true ]]; then
 
     # Load it
     [[ "$NVM_LAZY_LOAD" == true ]] && _zsh_nvm_lazy_load || _zsh_nvm_load
-
-    # Enable completion
-    [[ "$NVM_COMPLETION" == true ]] && _zsh_nvm_completion
     
     # Auto use nvm on chpwd
     [[ "$NVM_AUTO_USE" == true ]] && add-zsh-hook chpwd _zsh_nvm_auto_use && _zsh_nvm_auto_use
-
-    [[ "$NVM_AUTO_USE_ON_LOAD" == true && "$NVM_LAZY_LOAD" == true ]] && _zsh_nvm_auto_use_on_load
 
     # if [[ "$NVM_AUTO_USE_LAZY" == true ]]; then
     #   if [[ "$NVM_AUTO_USE_ON_LOAD" != true || "$NVM_LAZY_LOAD" != true || "$NVM_AUTO_USE" == true ]]; then
@@ -256,6 +319,8 @@ if [[ "$ZSH_NVM_NO_LOAD" != true ]]; then
     #   fi
     # fi
 
+    # Enable completion
+    [[ "$NVM_COMPLETION" == true ]] && _zsh_nvm_completion
   fi
 
 fi

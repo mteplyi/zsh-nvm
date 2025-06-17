@@ -38,7 +38,7 @@ _zsh_nvm_global_binaries() {
 }
 
 _zsh_nvm_load() {
-  echo Debug: _zsh_nvm_load
+  # echo Debug: _zsh_nvm_load
 
   # Source nvm (check if `nvm use` should be ran after load)
   if [[ "$NVM_NO_USE" == true ]]; then
@@ -52,7 +52,7 @@ _zsh_nvm_load() {
 
   # Declare our own nvm wrapper function
   nvm() {
-    echo Debug: _zsh_nvm_wrapper starts with "$@"
+    # echo Debug: _zsh_nvm_wrapper starts with "$@"
 
     # Restore main nvm function
     functions -c _zsh_nvm_nvm nvm
@@ -88,7 +88,7 @@ _zsh_nvm_load() {
       functions -c _zsh_nvm_nvm_wrapper nvm
     fi
 
-    echo Debug: _zsh_nvm_wrapper ends
+    # echo Debug: _zsh_nvm_wrapper ends
   }
 
   # Backup nvm wrapper function
@@ -243,10 +243,10 @@ _zsh_nvm_install_wrapper() {
 }
 
 _zsh_nvm_vars_load() {
-  echo Debug: _zsh_nvm_vars_load
+  # echo Debug: _zsh_nvm_vars_load
 
   if [[ -z "$NVM_BIN" ]]; then
-    echo Error: NVM_BIN is empty!
+    # echo Debug: NVM_BIN is empty!
   else
     #
     # Update PNPM_HOME for PNPM
@@ -269,10 +269,10 @@ _zsh_nvm_vars_load() {
 }
 
 _zsh_nvm_vars_unload() {
-  echo Debug: _zsh_nvm_vars_unload
+  # echo Debug: _zsh_nvm_vars_unload
 
   if [[ -z "${PNPM_HOME}" ]]; then
-    echo Error: PNPM_HOME is empty!
+    # echo Debug: PNPM_HOME is empty!
     return
   fi
 
